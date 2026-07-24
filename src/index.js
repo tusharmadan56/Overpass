@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 const PORT = 8080;
 const BACKEND = new URL('http://localhost:9001');
+const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS ?? 10000);
 
 // Hop-by-hop headers apply to a single transport connection, not the end-to-end
 // message, and must not be forwarded by a proxy (RFC 7230 §6.1).
@@ -41,6 +42,20 @@ const server = createServer((req, res) => {
   const requestId = req.headers['x-request-id'] ?? randomUUID();
   res.setHeader('x-request-id', requestId);
 
+  // Guard against emitting more than one response: an upstream can both time
+  // out and error, and writing headers twice throws.
+  let settled = false;
+  const fail = (status, message) => {
+    if (settled) return;
+    settled = true;
+    if (!res.headersSent) {
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: message, requestId }));
+    } else {
+      res.destroy();
+    }
+  };
+
   const upstream = request(
     {
       hostname: BACKEND.hostname,
@@ -48,6 +63,7 @@ const server = createServer((req, res) => {
       path: req.url,
       method: req.method,
       headers: buildForwardHeaders(req, requestId),
+      timeout: UPSTREAM_TIMEOUT_MS,
     },
     (upstreamRes) => {
       res.writeHead(upstreamRes.statusCode, upstreamRes.headers);
@@ -55,13 +71,15 @@ const server = createServer((req, res) => {
     },
   );
 
-  // Upstream unreachable or connection reset.
-  upstream.on('error', () => {
-    if (!res.headersSent) {
-      res.writeHead(502, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'bad gateway' }));
-    }
+  // Backend accepted the connection but stalled: abort and report a timeout
+  // instead of hanging the client.
+  upstream.on('timeout', () => {
+    upstream.destroy();
+    fail(504, 'gateway timeout');
   });
+
+  // Backend unreachable or connection reset.
+  upstream.on('error', () => fail(502, 'bad gateway'));
 
   req.pipe(upstream);
 });
