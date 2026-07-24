@@ -1,0 +1,17 @@
+# Gateway configuration. Everything the gateway does is driven from this file
+# so behaviour changes never require a code change or redeploy of logic.
+
+
+gateway:
+  port: 8080
+  # How long we wait on an upstream before giving up. A slow backend must not
+  # be allowed to tie up gateway resources indefinitely.
+  upstreamTimeoutMs: 10000
+
+backends:
+  - id: backend-1
+    url: http://localhost:9001
+  - id: backend-2
+    url: http://localhost:9002
+  - id: backend-3
+    url: http://localhost:9003

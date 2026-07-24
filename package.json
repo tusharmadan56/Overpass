@@ -1,0 +1,14 @@
+{
+  "name": "api-gateway",
+  "version": "0.1.0",
+  "description": "A from-scratch API gateway: rate limiting + load balancing over a reverse proxy.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "backend:1": "node backends/dummy-backend.js backend-1 9001",
+    "backend:2": "node backends/dummy-backend.js backend-2 9002",
+    "backend:3": "node backends/dummy-backend.js backend-3 9003"
+  }
+}
