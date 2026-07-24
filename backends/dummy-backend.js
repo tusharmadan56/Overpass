@@ -19,6 +19,9 @@ const server = createServer((req, res) => {
       port,
       method: req.method,
       path: req.url,
+      forwardedFor: req.headers['x-forwarded-for'],
+      requestId: req.headers['x-request-id'],
+      host: req.headers.host,
     }),
   );
 });
