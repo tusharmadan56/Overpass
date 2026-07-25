@@ -1,5 +1,6 @@
 import { createServer, request } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { log } from './logger.js';
 
 const PORT = 8080;
 const BACKEND = new URL('http://localhost:9001');
@@ -39,8 +40,20 @@ function buildForwardHeaders(req, requestId) {
 }
 
 const server = createServer((req, res) => {
+  const startedAt = performance.now();
   const requestId = req.headers['x-request-id'] ?? randomUUID();
   res.setHeader('x-request-id', requestId);
+
+  res.on('finish', () => {
+    log({
+      requestId,
+      method: req.method,
+      path: req.url,
+      status: res.statusCode,
+      backend: BACKEND.host,
+      latencyMs: Math.round(performance.now() - startedAt),
+    });
+  });
 
   // Guard against emitting more than one response: an upstream can both time
   // out and error, and writing headers twice throws.
