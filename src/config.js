@@ -1,0 +1,35 @@
+import { readFileSync } from 'node:fs';
+import { load } from 'js-yaml';
+
+export function loadConfig(path = 'config.yaml') {
+  const raw = load(readFileSync(path, 'utf8'));
+
+  if (!raw.backends || raw.backends.length === 0) {
+    throw new Error('config: at least one backend is required');
+  }
+
+  const backends = [];
+  const seenIds = new Set();
+
+  for (let i = 0; i < raw.backends.length; i++) {
+    const entry = raw.backends[i];
+
+    if (!entry.id) {
+      throw new Error(`config: backends[${i}] is missing an id`);
+    }
+    if (seenIds.has(entry.id)) {
+      throw new Error(`config: duplicate backend id "${entry.id}"`);
+    }
+    seenIds.add(entry.id);
+
+    // 
+    // a typo in the config fails at startup instead of on the first request.
+    backends.push({ id: entry.id, url: new URL(entry.url) });
+  }
+
+  return {
+    port: raw.gateway?.port ?? 8080,
+    upstreamTimeoutMs: raw.gateway?.upstreamTimeoutMs ?? 10000,
+    backends,
+  };
+}

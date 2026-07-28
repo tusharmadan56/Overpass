@@ -1,10 +1,11 @@
 import { createServer, request } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { log } from './logger.js';
+import { loadConfig } from './config.js';
+import { createRoundRobin } from './balancer.js';
 
-const PORT = 8080;
-const BACKEND = new URL('http://localhost:9001');
-const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS ?? 10000);
+const config = loadConfig();
+const balancer = createRoundRobin(config.backends);
 
 // Hop-by-hop headers apply to a single transport connection, not the end-to-end
 // message, and must not be forwarded by a proxy (RFC 7230 §6.1).
@@ -19,7 +20,7 @@ const HOP_BY_HOP = new Set([
   'upgrade',
 ]);
 
-function buildForwardHeaders(req, requestId) {
+function buildForwardHeaders(req, backend, requestId) {
   const headers = { ...req.headers };
   for (const name of Object.keys(headers)) {
     if (HOP_BY_HOP.has(name)) delete headers[name];
@@ -34,7 +35,7 @@ function buildForwardHeaders(req, requestId) {
   headers['x-forwarded-host'] = req.headers.host ?? '';
   headers['x-forwarded-proto'] = 'http';
   headers['x-request-id'] = requestId;
-  headers.host = BACKEND.host;
+  headers.host = backend.url.host;
 
   return headers;
 }
@@ -44,13 +45,15 @@ const server = createServer((req, res) => {
   const requestId = req.headers['x-request-id'] ?? randomUUID();
   res.setHeader('x-request-id', requestId);
 
+  const backend = balancer.next(req);
+
   res.on('finish', () => {
     log({
       requestId,
       method: req.method,
       path: req.url,
       status: res.statusCode,
-      backend: BACKEND.host,
+      backend: backend.id,
       latencyMs: Math.round(performance.now() - startedAt),
     });
   });
@@ -71,12 +74,12 @@ const server = createServer((req, res) => {
 
   const upstream = request(
     {
-      hostname: BACKEND.hostname,
-      port: BACKEND.port,
+      hostname: backend.url.hostname,
+      port: backend.url.port,
       path: req.url,
       method: req.method,
-      headers: buildForwardHeaders(req, requestId),
-      timeout: UPSTREAM_TIMEOUT_MS,
+      headers: buildForwardHeaders(req, backend, requestId),
+      timeout: config.upstreamTimeoutMs,
     },
     (upstreamRes) => {
       res.writeHead(upstreamRes.statusCode, upstreamRes.headers);
@@ -97,6 +100,6 @@ const server = createServer((req, res) => {
   req.pipe(upstream);
 });
 
-server.listen(PORT, () => {
-  console.log(`[overpass] gateway listening on http://localhost:${PORT}`);
+server.listen(config.port, () => {
+  console.log(`[overpass] gateway listening on http://localhost:${config.port}`);
 });

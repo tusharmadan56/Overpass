@@ -11,5 +11,8 @@
     "backend:1": "node backends/dummy-backend.js backend-1 9001",
     "backend:2": "node backends/dummy-backend.js backend-2 9002",
     "backend:3": "node backends/dummy-backend.js backend-3 9003"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
   }
 }
