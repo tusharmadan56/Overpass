@@ -2,10 +2,13 @@ import { createServer, request } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { log } from './logger.js';
 import { loadConfig } from './config.js';
-import { createRoundRobin } from './balancer.js';
+import { createRoundRobin, createLeastConnections } from './balancer.js';
 
 const config = loadConfig();
-const balancer = createRoundRobin(config.backends);
+const balancer =
+  config.strategy === 'least-connections'
+    ? createLeastConnections(config.backends)
+    : createRoundRobin(config.backends);
 
 // Hop-by-hop headers apply to a single transport connection, not the end-to-end
 // message, and must not be forwarded by a proxy (RFC 7230 §6.1).
@@ -47,6 +50,14 @@ const server = createServer((req, res) => {
 
   const backend = balancer.next(req);
 
+  // 'close' fires once the response is done
+  let released = false;
+  res.on('close', () => {
+    if (released) return;
+    released = true;
+    balancer.release(backend);
+  });
+
   res.on('finish', () => {
     log({
       requestId,
@@ -58,8 +69,7 @@ const server = createServer((req, res) => {
     });
   });
 
-  // Guard against emitting more than one response: an upstream can both time
-  // out and error, and writing headers twice throws.
+  // Guard against emitting more than one response
   let settled = false;
   const fail = (status, message) => {
     if (settled) return;
@@ -88,7 +98,7 @@ const server = createServer((req, res) => {
   );
 
   // Backend accepted the connection but stalled: abort and report a timeout
-  // instead of hanging the client.
+  
   upstream.on('timeout', () => {
     upstream.destroy();
     fail(504, 'gateway timeout');

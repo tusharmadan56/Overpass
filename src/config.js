@@ -30,6 +30,7 @@ export function loadConfig(path = 'config.yaml') {
   return {
     port: raw.gateway?.port ?? 8080,
     upstreamTimeoutMs: raw.gateway?.upstreamTimeoutMs ?? 10000,
+    strategy: raw.gateway?.strategy ?? 'round-robin',
     backends,
   };
 }

@@ -7,6 +7,8 @@ gateway:
   # How long we wait on an upstream before giving up. A slow backend must not
   # be allowed to tie up gateway resources indefinitely.
   upstreamTimeoutMs: 10000
+  # round-robin | least-connections
+  strategy: round-robin
 
 backends:
   - id: backend-1
