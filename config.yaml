@@ -10,6 +10,14 @@ gateway:
   # round-robin | least-connections
   strategy: round-robin
 
+healthCheck:
+  intervalMs: 2000
+  timeoutMs: 1000
+  # consecutive failures before a backend is taken out of rotation
+  unhealthyThreshold: 2
+  # consecutive successes before it's allowed back in
+  healthyThreshold: 2
+
 backends:
   - id: backend-1
     url: http://localhost:9001

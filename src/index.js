@@ -3,12 +3,17 @@ import { randomUUID } from 'node:crypto';
 import { log } from './logger.js';
 import { loadConfig } from './config.js';
 import { createRoundRobin, createLeastConnections } from './balancer.js';
+import { createHealthChecker } from './health.js';
 
 const config = loadConfig();
+
+const healthChecker = createHealthChecker(config.backends, config.healthCheck);
+healthChecker.start();
+
 const balancer =
   config.strategy === 'least-connections'
-    ? createLeastConnections(config.backends)
-    : createRoundRobin(config.backends);
+    ? createLeastConnections(config.backends, healthChecker.isHealthy)
+    : createRoundRobin(config.backends, healthChecker.isHealthy);
 
 // Hop-by-hop headers apply to a single transport connection, not the end-to-end
 // message, and must not be forwarded by a proxy (RFC 7230 §6.1).
@@ -49,6 +54,20 @@ const server = createServer((req, res) => {
   res.setHeader('x-request-id', requestId);
 
   const backend = balancer.next(req);
+
+  if (!backend) {
+    res.writeHead(503, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'no healthy backends available', requestId }));
+    log({
+      requestId,
+      method: req.method,
+      path: req.url,
+      status: 503,
+      backend: null,
+      latencyMs: Math.round(performance.now() - startedAt),
+    });
+    return;
+  }
 
   // 'close' fires once the response is done
   let released = false;

@@ -31,6 +31,12 @@ export function loadConfig(path = 'config.yaml') {
     port: raw.gateway?.port ?? 8080,
     upstreamTimeoutMs: raw.gateway?.upstreamTimeoutMs ?? 10000,
     strategy: raw.gateway?.strategy ?? 'round-robin',
+    healthCheck: {
+      intervalMs: raw.healthCheck?.intervalMs ?? 5000,
+      timeoutMs: raw.healthCheck?.timeoutMs ?? 2000,
+      unhealthyThreshold: raw.healthCheck?.unhealthyThreshold ?? 3,
+      healthyThreshold: raw.healthCheck?.healthyThreshold ?? 2,
+    },
     backends,
   };
 }

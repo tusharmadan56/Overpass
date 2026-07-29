@@ -1,22 +1,27 @@
 //  The shared cursor needs no lock  because Node runs request handlers on a single thread.
 
-export function createRoundRobin(backends) {
+export function createRoundRobin(backends, isHealthy = () => true) {
   let index = 0;
   return {
     next() {
-      const backend = backends[index];
-      index = (index + 1) % backends.length;
-      return backend;
+      for (let i = 0; i < backends.length; i++) {
+        const backend = backends[index];
+        index = (index + 1) % backends.length;
+        if (isHealthy(backend.id)) {
+          return backend;
+        }
+      }
+      return null;
     },
     release() {
-      
+
     },
   };
 }
 
 // Least connections: always route to whichever backend has the fewest requests
 
-export function createLeastConnections(backends) {
+export function createLeastConnections(backends, isHealthy = () => true) {
   const activeCounts = new Map();
   for (const backend of backends) {
     activeCounts.set(backend.id, 0);
@@ -24,11 +29,11 @@ export function createLeastConnections(backends) {
 
   return {
     next() {
-      let chosen = backends[0];
-      let lowest = activeCounts.get(chosen.id);
+      let chosen = null;
+      let lowest = Infinity;
 
-      for (let i = 1; i < backends.length; i++) {
-        const backend = backends[i];
+      for (const backend of backends) {
+        if (!isHealthy(backend.id)) continue;
         const count = activeCounts.get(backend.id);
         if (count < lowest) {
           chosen = backend;
@@ -36,7 +41,9 @@ export function createLeastConnections(backends) {
         }
       }
 
-      activeCounts.set(chosen.id, lowest + 1);
+      if (chosen) {
+        activeCounts.set(chosen.id, lowest + 1);
+      }
       return chosen;
     },
     release(backend) {
