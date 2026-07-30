@@ -99,3 +99,38 @@ export function createSlidingWindowCounterLimiter({ limit, windowMs, now = Date.
     },
   };
 }
+
+// Token bucket
+export function createTokenBucketLimiter({ capacity, refillRatePerSec, now = Date.now }) {
+  const buckets = new Map();
+
+  return {
+    async allow(key) {
+      const currentTime = now();
+
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { tokens: capacity, lastRefill: currentTime };
+        buckets.set(key, bucket);
+      }
+
+      const elapsedSec = (currentTime - bucket.lastRefill) / 1000;
+      bucket.tokens = Math.min(capacity, bucket.tokens + elapsedSec * refillRatePerSec);
+      bucket.lastRefill = currentTime;
+
+      const allowed = bucket.tokens >= 1;
+      if (allowed) {
+        bucket.tokens -= 1;
+      }
+
+      const deficit = Math.max(0, 1 - bucket.tokens);
+
+      return {
+        allowed,
+        limit: capacity,
+        remaining: Math.floor(bucket.tokens),
+        resetAt: currentTime + (deficit / refillRatePerSec) * 1000,
+      };
+    },
+  };
+}
