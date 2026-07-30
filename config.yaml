@@ -18,6 +18,16 @@ healthCheck:
   # consecutive successes before it's allowed back in
   healthyThreshold: 2
 
+rateLimit:
+  # fixed-window | sliding-log | sliding-window-counter | token-bucket
+  algorithm: token-bucket
+  # used by token-bucket
+  capacity: 5
+  refillRatePerSec: 1
+  # used by fixed-window / sliding-log / sliding-window-counter
+  limit: 5
+  windowMs: 5000
+
 backends:
   - id: backend-1
     url: http://localhost:9001

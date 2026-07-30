@@ -37,6 +37,13 @@ export function loadConfig(path = 'config.yaml') {
       unhealthyThreshold: raw.healthCheck?.unhealthyThreshold ?? 3,
       healthyThreshold: raw.healthCheck?.healthyThreshold ?? 2,
     },
+    rateLimit: {
+      algorithm: raw.rateLimit?.algorithm ?? 'token-bucket',
+      capacity: raw.rateLimit?.capacity ?? 20,
+      refillRatePerSec: raw.rateLimit?.refillRatePerSec ?? 5,
+      limit: raw.rateLimit?.limit ?? 20,
+      windowMs: raw.rateLimit?.windowMs ?? 10000,
+    },
     backends,
   };
 }

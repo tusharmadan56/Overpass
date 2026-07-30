@@ -1,13 +1,31 @@
 import { request } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { log } from './logger.js';
-import { buildForwardHeaders } from './headers.js';
+import { buildForwardHeaders, applyRateLimitHeaders } from './headers.js';
+import { getClientKey } from './rateLimitKey.js';
 
-export function createRequestHandler(config, balancer) {
-  return function handleRequest(req, res) {
+export function createRequestHandler(config, balancer, rateLimiter) {
+  return async function handleRequest(req, res) {
     const startedAt = performance.now();
     const requestId = req.headers['x-request-id'] ?? randomUUID();
     res.setHeader('x-request-id', requestId);
+
+    const decision = await rateLimiter.allow(getClientKey(req));
+    applyRateLimitHeaders(res, decision);
+
+    if (!decision.allowed) {
+      res.writeHead(429, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'too many requests', requestId }));
+      log({
+        requestId,
+        method: req.method,
+        path: req.url,
+        status: 429,
+        backend: null,
+        latencyMs: Math.round(performance.now() - startedAt),
+      });
+      return;
+    }
 
     const backend = balancer.next(req);
 

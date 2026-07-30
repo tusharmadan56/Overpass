@@ -30,3 +30,18 @@ export function buildForwardHeaders(req, backend, requestId) {
 
   return headers;
 }
+
+// Both X-RateLimit-Reset and Retry-After are expressed as delay-seconds here
+// (some APIs use an absolute unix timestamp for X-RateLimit-Reset instead —
+// either is valid, this just keeps both headers in the same unit).
+export function applyRateLimitHeaders(res, decision) {
+  const resetSeconds = Math.max(0, Math.ceil((decision.resetAt - Date.now()) / 1000));
+
+  res.setHeader('x-ratelimit-limit', decision.limit);
+  res.setHeader('x-ratelimit-remaining', decision.remaining);
+  res.setHeader('x-ratelimit-reset', resetSeconds);
+
+  if (!decision.allowed) {
+    res.setHeader('retry-after', resetSeconds);
+  }
+}

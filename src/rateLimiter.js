@@ -134,3 +134,19 @@ export function createTokenBucketLimiter({ capacity, refillRatePerSec, now = Dat
     },
   };
 }
+
+export function createRateLimiter(options) {
+  if (options.algorithm === 'fixed-window') {
+    return createFixedWindowLimiter(options);
+  }
+  if (options.algorithm === 'sliding-log') {
+    return createSlidingLogLimiter(options);
+  }
+  if (options.algorithm === 'sliding-window-counter') {
+    return createSlidingWindowCounterLimiter(options);
+  }
+  if (options.algorithm === 'token-bucket') {
+    return createTokenBucketLimiter(options);
+  }
+  throw new Error(`rate limiter: unknown algorithm "${options.algorithm}"`);
+}
