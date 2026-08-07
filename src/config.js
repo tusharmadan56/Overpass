@@ -43,6 +43,7 @@ export function loadConfig(path = 'config.yaml') {
       refillRatePerSec: raw.rateLimit?.refillRatePerSec ?? 5,
       limit: raw.rateLimit?.limit ?? 20,
       windowMs: raw.rateLimit?.windowMs ?? 10000,
+      redisUrl: raw.rateLimit?.redisUrl ?? null,
     },
     backends,
   };

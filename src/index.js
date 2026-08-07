@@ -4,21 +4,44 @@ import { createRoundRobin, createLeastConnections } from './balancer.js';
 import { createHealthChecker } from './health.js';
 import { createRequestHandler } from './proxy.js';
 import { createRateLimiter } from './rateLimiter.js';
+import { createRedisRateLimiter } from './redisRateLimiter.js';
+import { createMetricsCollector } from './metrics.js';
 
-const config = loadConfig();
+async function main() {
+  const config = loadConfig();
 
-const healthChecker = createHealthChecker(config.backends, config.healthCheck);
-healthChecker.start();
+  const healthChecker = createHealthChecker(config.backends, config.healthCheck);
+  healthChecker.start();
 
-const balancer =
-  config.strategy === 'least-connections'
-    ? createLeastConnections(config.backends, healthChecker.isHealthy)
-    : createRoundRobin(config.backends, healthChecker.isHealthy);
+  const balancer =
+    config.strategy === 'least-connections'
+      ? createLeastConnections(config.backends, healthChecker.isHealthy)
+      : createRoundRobin(config.backends, healthChecker.isHealthy);
 
-const rateLimiter = createRateLimiter(config.rateLimit);
+  let rateLimiter;
+  if (config.rateLimit.redisUrl) {
+    rateLimiter = await createRedisRateLimiter({
+      redisUrl: config.rateLimit.redisUrl,
+      capacity: config.rateLimit.capacity,
+      refillRatePerSec: config.rateLimit.refillRatePerSec,
+    });
+    console.log('[overpass] using Redis-backed distributed rate limiter');
+  } else {
+    rateLimiter = createRateLimiter(config.rateLimit);
+    console.log('[overpass] using in-memory rate limiter');
+  }
 
-const server = createServer(createRequestHandler(config, balancer, rateLimiter));
+  const metrics = createMetricsCollector();
 
-server.listen(config.port, () => {
-  console.log(`[overpass] gateway listening on http://localhost:${config.port}`);
+  const server = createServer(createRequestHandler(config, balancer, rateLimiter, metrics));
+
+  server.listen(config.port, () => {
+    console.log(`[overpass] gateway listening on http://localhost:${config.port}`);
+    console.log(`[overpass] metrics available at http://localhost:${config.port}/metrics`);
+  });
+}
+
+main().catch((err) => {
+  console.error('[overpass] startup failed:', err.message);
+  process.exit(1);
 });

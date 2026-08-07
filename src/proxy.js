@@ -4,8 +4,13 @@ import { log } from './logger.js';
 import { buildForwardHeaders, applyRateLimitHeaders } from './headers.js';
 import { getClientKey } from './rateLimitKey.js';
 
-export function createRequestHandler(config, balancer, rateLimiter) {
+export function createRequestHandler(config, balancer, rateLimiter, metrics) {
   return async function handleRequest(req, res) {
+    if (req.url === '/metrics') {
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end(metrics.formatMetrics());
+      return;
+    }
     const startedAt = performance.now();
     const requestId = req.headers['x-request-id'] ?? randomUUID();
     res.setHeader('x-request-id', requestId);
@@ -14,15 +19,17 @@ export function createRequestHandler(config, balancer, rateLimiter) {
     applyRateLimitHeaders(res, decision);
 
     if (!decision.allowed) {
+      const latencyMs = Math.round(performance.now() - startedAt);
       res.writeHead(429, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: 'too many requests', requestId }));
+      metrics.recordRequest(req.method, 429, latencyMs, null);
       log({
         requestId,
         method: req.method,
         path: req.url,
         status: 429,
         backend: null,
-        latencyMs: Math.round(performance.now() - startedAt),
+        latencyMs,
       });
       return;
     }
@@ -30,15 +37,17 @@ export function createRequestHandler(config, balancer, rateLimiter) {
     const backend = balancer.next(req);
 
     if (!backend) {
+      const latencyMs = Math.round(performance.now() - startedAt);
       res.writeHead(503, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: 'no healthy backends available', requestId }));
+      metrics.recordRequest(req.method, 503, latencyMs, null);
       log({
         requestId,
         method: req.method,
         path: req.url,
         status: 503,
         backend: null,
-        latencyMs: Math.round(performance.now() - startedAt),
+        latencyMs,
       });
       return;
     }
@@ -52,13 +61,15 @@ export function createRequestHandler(config, balancer, rateLimiter) {
     });
 
     res.on('finish', () => {
+      const latencyMs = Math.round(performance.now() - startedAt);
+      metrics.recordRequest(req.method, res.statusCode, latencyMs, backend.id);
       log({
         requestId,
         method: req.method,
         path: req.url,
         status: res.statusCode,
         backend: backend.id,
-        latencyMs: Math.round(performance.now() - startedAt),
+        latencyMs,
       });
     });
 

@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: overpass-redis
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 1s
+      timeout: 3s
+      retries: 5
+
+  backend-1:
+    image: node:24-alpine
+    container_name: overpass-backend-1
+    working_dir: /app
+    command: node backends/dummy-backend.js backend-1 9001
+    volumes:
+      - './backends:/app/backends:ro'
+    expose:
+      - '9001'
+
+  backend-2:
+    image: node:24-alpine
+    container_name: overpass-backend-2
+    working_dir: /app
+    command: node backends/dummy-backend.js backend-2 9002
+    volumes:
+      - './backends:/app/backends:ro'
+    expose:
+      - '9002'
+
+  backend-3:
+    image: node:24-alpine
+    container_name: overpass-backend-3
+    working_dir: /app
+    command: node backends/dummy-backend.js backend-3 9003
+    volumes:
+      - './backends:/app/backends:ro'
+    expose:
+      - '9003'
+
+  gateway-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: overpass-gateway-1
+    ports:
+      - '8080:8080'
+    environment:
+      GATEWAY_PORT: '8080'
+      REDIS_URL: 'redis://redis:6379/0'
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend-1:
+        condition: service_started
+      backend-2:
+        condition: service_started
+      backend-3:
+        condition: service_started
+    volumes:
+      - './config.yaml:/app/config.yaml:ro'
+
+  gateway-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: overpass-gateway-2
+    ports:
+      - '8081:8080'
+    environment:
+      GATEWAY_PORT: '8080'
+      REDIS_URL: 'redis://redis:6379/0'
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend-1:
+        condition: service_started
+      backend-2:
+        condition: service_started
+      backend-3:
+        condition: service_started
+    volumes:
+      - './config.yaml:/app/config.yaml:ro'
+
+  gateway-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: overpass-gateway-3
+    ports:
+      - '8082:8080'
+    environment:
+      GATEWAY_PORT: '8080'
+      REDIS_URL: 'redis://redis:6379/0'
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend-1:
+        condition: service_started
+      backend-2:
+        condition: service_started
+      backend-3:
+        condition: service_started
+    volumes:
+      - './config.yaml:/app/config.yaml:ro'

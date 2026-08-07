@@ -27,11 +27,13 @@ rateLimit:
   # used by fixed-window / sliding-log / sliding-window-counter
   limit: 5
   windowMs: 5000
+  # optional: if set, use Redis-backed distributed limiting instead of in-memory
+  redisUrl: null
 
 backends:
   - id: backend-1
-    url: http://localhost:9001
+    url: http://backend-1:9001
   - id: backend-2
-    url: http://localhost:9002
+    url: http://backend-2:9002
   - id: backend-3
-    url: http://localhost:9003
+    url: http://backend-3:9003
